@@ -789,6 +789,7 @@
             let isDragging = false;
             let startX, startLeft;
             let hasMoved = false;
+            let isTouchEvent = false;
 
             function getClientX(e) {
                 if (e.touches && e.touches.length > 0) {
@@ -800,6 +801,7 @@
             function handleDragStart(e) {
                 isDragging = true;
                 hasMoved = false;
+                isTouchEvent = e.type === 'touchstart';
                 block.classList.add('dragging');
                 startX = getClientX(e);
                 startLeft = unitState.start;
@@ -842,6 +844,14 @@
                 if (isDragging) {
                     isDragging = false;
                     block.classList.remove('dragging');
+                    
+                    // Handle tap-to-flip for touch events (don't wait for click)
+                    if (isTouchEvent && !hasMoved) {
+                        unitState.sacFirst = !unitState.sacFirst;
+                        renderSchedule();
+                        checkConstraints();
+                        updateURL();
+                    }
                 }
             }
 
@@ -855,9 +865,9 @@
             document.addEventListener('touchmove', handleDragMove, { passive: false });
             document.addEventListener('touchend', handleDragEnd);
 
-            // Click/tap to flip order (only if not dragged)
+            // Click to flip order (mouse only - touch is handled in handleDragEnd)
             block.addEventListener('click', (e) => {
-                if (!hasMoved) {
+                if (!isTouchEvent && !hasMoved) {
                     unitState.sacFirst = !unitState.sacFirst;
                     renderSchedule();
                     checkConstraints();
