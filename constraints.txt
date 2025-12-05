@@ -47,8 +47,10 @@ In code terms for Liberty (L) and Rush Creek (RC):
 ⸻
 
 4. Classroom / Second-Hour Constraints
-	9.	Rush Creek and San Rafael may not have second hour at the same time.
+	9.	Liberty, Rush Creek, and San Rafael may not have second hour at the same time with each other.
 	•	Their 2ND blocks must not overlap:
+	•	2ND_L ∩ 2ND_RC = ∅ (empty set).
+	•	2ND_L ∩ 2ND_SF = ∅ (empty set).
 	•	2ND_RC ∩ 2ND_SF = ∅ (empty set).
 	•	Reason: not enough classrooms for two full second-hour programs (children + youth + adults).
 	10.	Second hour vs sacrament overlaps are allowed:
@@ -58,10 +60,9 @@ In code terms for Liberty (L) and Rush Creek (RC):
 	•	Chapel turnaround constraints (15–30 min between SAC end/start) are respected, and
 	•	You don’t violate the Liberty/RC block separation.
 	11.	Second hour vs second hour is allowed between:
-	•	YSA and any other unit.
-	•	(Potentially Liberty and SF/YSA, but in practice Liberty is early and out before others ramp up.)
+	•	YSA and any other unit (YSA is small and doesn't require full classroom space).
 
-So the only forbidden second-hour pair is RC vs SF.
+So the forbidden second-hour pairs are: Liberty vs Rush Creek, Liberty vs San Rafael, and Rush Creek vs San Rafael.
 
 ⸻
 
@@ -121,7 +122,7 @@ If you’re encoding this into a little tool/solver, you might define:
 	2.	No SAC–SAC overlap.
 	3.	start_sac(B) ≥ end_sac(A) + 15 min for any two units A,B ordered in time.
 	4.	Liberty & Rush Creek blocks non-overlapping, with ≥30 min between.
-	5.	RC 2ND cannot overlap SF 2ND.
+	5.	Liberty, Rush Creek, and San Rafael 2ND cannot overlap with each other (only YSA can overlap).
 	6.	SF must have a full contiguous 1-hour 2ND block.
 	7.	All block start times are on 30-minute boundaries.
 	•	Soft constraints (for scoring / “best” schedule):

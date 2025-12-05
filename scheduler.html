@@ -576,9 +576,9 @@
 
                     <h3>4. Classroom / Second-Hour Constraints</h3>
                     <ul>
-                        <li><span class="hard">Hard: Rush Creek 2ND and San Rafael 2ND cannot overlap</span> (not enough classrooms)</li>
+                        <li><span class="hard">Hard: Liberty, Rush Creek, and San Rafael 2ND cannot overlap with each other</span> (not enough classrooms)</li>
                         <li>2ND vs SAC overlaps between different units are allowed</li>
-                        <li>YSA 2ND can overlap with any other unit's 2ND or SAC</li>
+                        <li>YSA 2ND can overlap with any other unit's 2ND or SAC (YSA is small)</li>
                     </ul>
 
                     <h3>5. San Rafael Independence</h3>
@@ -611,7 +611,7 @@
                         <li>No SAC–SAC overlap</li>
                         <li>15 min minimum between consecutive SAC meetings</li>
                         <li>Liberty & Rush Creek blocks non-overlapping with 30 min gap</li>
-                        <li>Rush Creek 2ND cannot overlap San Rafael 2ND</li>
+                        <li>Liberty, Rush Creek, and San Rafael 2ND cannot overlap (only YSA can)</li>
                     </ul>
                     <p><strong class="soft">Soft constraints</strong> (preferred, affects score):</p>
                     <ul>
@@ -971,18 +971,33 @@
                 }
             }
 
-            // 4. RC 2ND and SF 2ND cannot overlap (hard)
+            // 4. Liberty, Rush Creek, and San Rafael 2ND cannot overlap with each other (hard)
+            const lib2nd = get2ndTime('liberty');
             const rc2nd = get2ndTime('rushcreek');
             const sf2nd = get2ndTime('sanrafael');
+            
+            const secondHourConflicts = [];
+            if (timesOverlap(lib2nd, rc2nd)) {
+                secondHourConflicts.push('Liberty & Rush Creek');
+            }
+            if (timesOverlap(lib2nd, sf2nd)) {
+                secondHourConflicts.push('Liberty & San Rafael');
+            }
             if (timesOverlap(rc2nd, sf2nd)) {
-                constraints.push({
-                    text: 'Rush Creek & San Rafael 2ND overlap (classroom conflict)',
-                    status: 'fail'
+                secondHourConflicts.push('Rush Creek & San Rafael');
+            }
+            
+            if (secondHourConflicts.length > 0) {
+                secondHourConflicts.forEach(conflict => {
+                    constraints.push({
+                        text: `${conflict} 2ND overlap (classroom conflict)`,
+                        status: 'fail'
+                    });
+                    score -= 25;
                 });
-                score -= 25;
             } else {
                 constraints.push({
-                    text: 'Rush Creek & San Rafael 2ND do not overlap',
+                    text: 'No 2ND hour classroom conflicts',
                     status: 'pass'
                 });
             }
