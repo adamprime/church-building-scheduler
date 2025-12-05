@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clayview Building Scheduler</title>
+    <style>
+        :root {
+            --bg-primary: #f5f5f5;
+            --bg-card: white;
+            --bg-timeline: #f9f9f9;
+            --bg-summary: #f9f9f9;
+            --text-primary: #333;
+            --text-secondary: #666;
+            --text-muted: #888;
+            --border-color: #ddd;
+            --grid-line: #ccc;
+            --grid-line-hour: #aaa;
+            --score-bg: #f0f9ff;
+        }
+        body.dark-mode {
+            --bg-primary: #1a1a2e;
+            --bg-card: #16213e;
+            --bg-timeline: #1a1a2e;
+            --bg-summary: #1a1a2e;
+            --text-primary: #eee;
+            --text-secondary: #aaa;
+            --text-muted: #888;
+            --border-color: #333;
+            --grid-line: #444;
+            --grid-line-hour: #555;
+            --score-bg: #1e3a5f;
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            padding: 20px;
+            min-height: 100vh;
+            transition: background 0.3s, color 0.3s;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: var(--text-primary);
+        }
+        .subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .toolbar button {
+            padding: 8px 16px;
+            border: 1px solid #ccc;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .toolbar button:hover {
+            background: #e9e9e9;
+        }
+        body.dark-mode .toolbar button {
+            background: #2d3748;
+            border-color: #4a5568;
+            color: #eee;
+        }
+        body.dark-mode .toolbar button:hover {
+            background: #4a5568;
+        }
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .scheduler {
+            background: var(--bg-card);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            overflow-x: auto;
+        }
+        .timeline-header {
+            display: flex;
+            margin-left: 120px;
+            margin-bottom: 5px;
+            position: relative;
+            height: 25px;
+        }
+        .time-label {
+            position: absolute;
+            font-size: 11px;
+            color: var(--text-secondary);
+            transform: translateX(-50%);
+        }
+        .schedule-row {
+            display: flex;
+            align-items: center;
+            height: 60px;
+            margin-bottom: 10px;
+            position: relative;
+        }
+        .unit-label {
+            width: 120px;
+            font-weight: 600;
+            font-size: 14px;
+            flex-shrink: 0;
+            color: var(--text-primary);
+        }
+        .timeline {
+            flex: 1;
+            height: 50px;
+            background: var(--bg-timeline);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            position: relative;
+            min-width: 800px;
+        }
+        .time-grid-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--grid-line);
+        }
+        .time-grid-line.hour {
+            width: 2px;
+            background: var(--grid-line-hour);
+        }
+        .block {
+            position: absolute;
+            top: 5px;
+            height: 40px;
+            border-radius: 4px;
+            cursor: grab;
+            display: flex;
+            user-select: none;
+            transition: box-shadow 0.2s;
+        }
+        .block:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        .block.dragging {
+            cursor: grabbing;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 100;
+        }
+        .block.violation {
+            animation: shake 0.3s ease-in-out;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px); }
+            75% { transform: translateX(3px); }
+        }
+        .block-segment {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        .block-segment.sac {
+            border-radius: 4px 0 0 4px;
+        }
+        .block-segment.second {
+            border-radius: 0 4px 4px 0;
+        }
+        .block-segment.sac.only, .block-segment.second.first {
+            border-radius: 4px 0 0 4px;
+        }
+        .block-segment.second.only, .block-segment.sac.last {
+            border-radius: 0 4px 4px 0;
+        }
+        /* Unit colors */
+        .liberty .sac { background: #2563eb; }
+        .liberty .second { background: #60a5fa; }
+        .rushcreek .sac { background: #059669; }
+        .rushcreek .second { background: #34d399; }
+        .sanrafael .sac { background: #d97706; }
+        .sanrafael .second { background: #fbbf24; }
+        .ysa .sac { background: #7c3aed; }
+        .ysa .second { background: #a78bfa; }
+
+        .constraints-panel {
+            margin-top: 20px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .constraints-panel h2 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+        .constraint-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 8px;
+        }
+        .constraint {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            padding: 6px 10px;
+            border-radius: 4px;
+        }
+        .constraint.pass {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .constraint.fail {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        .constraint.warn {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .constraint-icon {
+            font-size: 14px;
+        }
+        .schedule-summary {
+            margin-top: 20px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .schedule-summary h2 {
+            font-size: 16px;
+            margin-bottom: 15px;
+            color: var(--text-primary);
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .summary-unit {
+            padding: 10px;
+            border-radius: 4px;
+            background: var(--bg-summary);
+            border: 1px solid var(--border-color);
+        }
+        .summary-unit h3 {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        .summary-unit p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin: 4px 0;
+        }
+        .instructions {
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-top: 15px;
+        }
+        .score {
+            text-align: center;
+            font-size: 18px;
+            margin-top: 10px;
+            padding: 10px;
+            background: var(--score-bg);
+            border-radius: 4px;
+            color: var(--text-primary);
+        }
+        .score.good { background: #d1fae5; color: #065f46; }
+        .score.warning { background: #fef3c7; color: #92400e; }
+        .score.bad { background: #fee2e2; color: #991b1b; }
+
+        /* Print styles */
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+            body, body.dark-mode {
+                background: white !important;
+                padding: 10px;
+                --bg-primary: #f5f5f5;
+                --bg-card: white;
+                --bg-timeline: #f9f9f9;
+                --bg-summary: #f9f9f9;
+                --text-primary: #333;
+                --text-secondary: #666;
+                --border-color: #ddd;
+                --grid-line: #ccc;
+                --grid-line-hour: #aaa;
+            }
+            .toolbar {
+                display: none;
+            }
+            .scheduler, .constraints-panel, .schedule-summary {
+                box-shadow: none;
+                border: 1px solid #ddd;
+            }
+            .instructions {
+                display: none;
+            }
+            .block-segment.sac, .block-segment.second {
+                color: white !important;
+            }
+            .liberty .sac { background: #2563eb !important; }
+            .liberty .second { background: #60a5fa !important; }
+            .rushcreek .sac { background: #059669 !important; }
+            .rushcreek .second { background: #34d399 !important; }
+            .sanrafael .sac { background: #d97706 !important; }
+            .sanrafael .second { background: #fbbf24 !important; }
+            .ysa .sac { background: #7c3aed !important; }
+            .ysa .second { background: #a78bfa !important; }
+            .constraint.pass { background: #d1fae5 !important; color: #065f46 !important; }
+            .constraint.fail { background: #fee2e2 !important; color: #991b1b !important; }
+            .constraint.warn { background: #fef3c7 !important; color: #92400e !important; }
+            .score.good { background: #d1fae5 !important; color: #065f46 !important; }
+            .score.warning { background: #fef3c7 !important; color: #92400e !important; }
+            .score.bad { background: #fee2e2 !important; color: #991b1b !important; }
+            .constraints-reference {
+                box-shadow: none;
+                border: 1px solid #ddd;
+            }
+            .constraints-reference:not(.open) {
+                display: none;
+            }
+            .constraints-reference-content {
+                max-height: none !important;
+            }
+            .constraints-reference-toggle {
+                display: none;
+            }
+            .constraints-reference-inner .hard { color: #dc2626 !important; }
+            .constraints-reference-inner .soft { color: #d97706 !important; }
+        }
+
+        /* Overlap indicator on timeline */
+        .overlap-marker {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: rgba(239, 68, 68, 0.2);
+            border-left: 2px solid #ef4444;
+            border-right: 2px solid #ef4444;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* Collapsible constraints reference */
+        .constraints-reference {
+            margin-top: 20px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .constraints-reference-header {
+            padding: 15px 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+        }
+        .constraints-reference-header:hover {
+            background: var(--bg-timeline);
+        }
+        .constraints-reference-header h2 {
+            font-size: 16px;
+            color: var(--text-primary);
+            margin: 0;
+        }
+        .constraints-reference-toggle {
+            font-size: 18px;
+            color: var(--text-secondary);
+            transition: transform 0.3s;
+        }
+        .constraints-reference.open .constraints-reference-toggle {
+            transform: rotate(180deg);
+        }
+        .constraints-reference-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        .constraints-reference.open .constraints-reference-content {
+            max-height: 2000px;
+        }
+        .constraints-reference-inner {
+            padding: 0 20px 20px 20px;
+            font-size: 13px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+        }
+        .constraints-reference-inner h3 {
+            font-size: 14px;
+            color: var(--text-primary);
+            margin: 15px 0 8px 0;
+        }
+        .constraints-reference-inner h3:first-child {
+            margin-top: 0;
+        }
+        .constraints-reference-inner ul {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+        .constraints-reference-inner li {
+            margin: 4px 0;
+        }
+        .constraints-reference-inner .hard {
+            color: #dc2626;
+        }
+        .constraints-reference-inner .soft {
+            color: #d97706;
+        }
+        body.dark-mode .constraints-reference-inner .hard {
+            color: #f87171;
+        }
+        body.dark-mode .constraints-reference-inner .soft {
+            color: #fbbf24;
+        }
+
+        /* Mobile responsive styles */
+        @media (max-width: 900px) {
+            body {
+                padding: 10px;
+            }
+            h1 {
+                font-size: 22px;
+            }
+            .toolbar {
+                gap: 6px;
+            }
+            .toolbar button {
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+            .timeline-header {
+                margin-left: 80px;
+            }
+            .unit-label {
+                width: 80px;
+                font-size: 12px;
+            }
+            .timeline {
+                min-width: 600px;
+                height: 55px;
+            }
+            .block {
+                height: 45px;
+            }
+            .time-label {
+                font-size: 9px;
+            }
+            .constraint-list {
+                grid-template-columns: 1fr;
+            }
+            .summary-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        @media (max-width: 600px) {
+            .timeline-header {
+                margin-left: 70px;
+            }
+            .unit-label {
+                width: 70px;
+                font-size: 11px;
+            }
+            .timeline {
+                min-width: 500px;
+                height: 60px;
+            }
+            .block {
+                height: 50px;
+                top: 5px;
+            }
+            .block-segment {
+                font-size: 10px;
+            }
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+            .time-label {
+                font-size: 8px;
+            }
+        }
+
+        /* Touch-friendly: prevent text selection during drag */
+        .block {
+            touch-action: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Clayview Building Scheduler</h1>
+        <p class="subtitle">Drag blocks to adjust times. Click a block to flip SAC/2ND order.</p>
+        
+        <div class="toolbar">
+            <button onclick="resetToDefault()">Reset to Default</button>
+            <button onclick="copySchedule()">Copy Schedule</button>
+            <button onclick="copyLink()">Copy Shareable Link</button>
+            <button onclick="window.print()">Print / Save PDF</button>
+            <button onclick="toggleDarkMode()" class="theme-toggle" id="theme-btn">
+                <span id="theme-icon">🌙</span> Dark Mode
+            </button>
+        </div>
+
+        <div class="scheduler">
+            <div class="timeline-header" id="timeline-header"></div>
+            <div id="schedule-rows"></div>
+            <p class="instructions">Drag blocks horizontally to move. Click a block to swap SAC ↔ 2ND order. Blocks snap to 30-minute increments.</p>
+        </div>
+
+        <div class="score" id="score"></div>
+
+        <div class="constraints-panel">
+            <h2>Constraint Status</h2>
+            <div class="constraint-list" id="constraint-list"></div>
+        </div>
+
+        <div class="schedule-summary">
+            <h2>Schedule Summary</h2>
+            <div class="summary-grid" id="summary-grid"></div>
+        </div>
+
+        <div class="constraints-reference" id="constraints-reference">
+            <div class="constraints-reference-header" onclick="toggleConstraintsReference()">
+                <h2>Scheduling Constraints Reference</h2>
+                <span class="constraints-reference-toggle">▼</span>
+            </div>
+            <div class="constraints-reference-content">
+                <div class="constraints-reference-inner">
+                    <h3>1. Units & Blocks</h3>
+                    <ul>
+                        <li>Each unit (Liberty, Rush Creek, San Rafael, YSA) has a 2-hour block: 1 hour Sacrament (SAC) + 1 hour Second Hour (2ND)</li>
+                        <li>Order can be SAC → 2ND or 2ND → SAC</li>
+                    </ul>
+
+                    <h3>2. Chapel / Sacrament Constraints</h3>
+                    <ul>
+                        <li>Only one chapel exists — <span class="hard">no SAC meetings can overlap</span></li>
+                        <li><span class="hard">Hard: 15 min minimum</span> between end of one SAC and start of next</li>
+                        <li><span class="soft">Soft: 30 min preferred</span> for chapel turnaround</li>
+                    </ul>
+
+                    <h3>3. Parking & Family-Ward Constraint</h3>
+                    <ul>
+                        <li><span class="hard">Hard: Liberty & Rush Creek blocks cannot overlap at all</span> (parking constraint)</li>
+                        <li><span class="hard">Hard: 30 min minimum gap</span> between Liberty block end and Rush Creek block start (or vice versa)</li>
+                    </ul>
+
+                    <h3>4. Classroom / Second-Hour Constraints</h3>
+                    <ul>
+                        <li><span class="hard">Hard: Rush Creek 2ND and San Rafael 2ND cannot overlap</span> (not enough classrooms)</li>
+                        <li>2ND vs SAC overlaps between different units are allowed</li>
+                        <li>YSA 2ND can overlap with any other unit's 2ND or SAC</li>
+                    </ul>
+
+                    <h3>5. San Rafael Independence</h3>
+                    <ul>
+                        <li>San Rafael runs fully independent second hour (own Primary, YM/YW, RS/PH)</li>
+                        <li>Must have full 1-hour 2ND block with classroom availability</li>
+                    </ul>
+
+                    <h3>6. Time Grid</h3>
+                    <ul>
+                        <li>All times snap to 30-minute increments</li>
+                    </ul>
+
+                    <h3>7. YSA Flexibility</h3>
+                    <ul>
+                        <li>YSA is small, no parking impact — most flexible for movement</li>
+                        <li><span class="soft">Soft preference:</span> 2ND 2:00–3:00, SAC 3:00–4:00</li>
+                    </ul>
+
+                    <h3>8. Day Window Preferences</h3>
+                    <ul>
+                        <li><span class="soft">Soft: Preferred window 9:00 AM – 4:00 PM</span></li>
+                        <li><span class="soft">Soft: Avoid starts before 8:30 AM or ends after 4:30–5:00 PM</span></li>
+                        <li><span class="soft">Soft: Minimize changes from current schedule</span></li>
+                    </ul>
+
+                    <h3>Summary: Hard vs Soft Constraints</h3>
+                    <p><strong class="hard">Hard constraints</strong> (must not violate):</p>
+                    <ul>
+                        <li>No SAC–SAC overlap</li>
+                        <li>15 min minimum between consecutive SAC meetings</li>
+                        <li>Liberty & Rush Creek blocks non-overlapping with 30 min gap</li>
+                        <li>Rush Creek 2ND cannot overlap San Rafael 2ND</li>
+                    </ul>
+                    <p><strong class="soft">Soft constraints</strong> (preferred, affects score):</p>
+                    <ul>
+                        <li>30 min chapel turnaround between SAC meetings</li>
+                        <li>Stay within 9:00 AM – 4:00 PM window</li>
+                        <li>Keep units close to current times</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Constants
+        const START_HOUR = 8.5; // 8:30 AM
+        const END_HOUR = 17;    // 5:00 PM
+        const TOTAL_HOURS = END_HOUR - START_HOUR;
+        const SLOT_MINUTES = 30;
+        const BLOCK_DURATION = 2; // hours
+
+        // Unit definitions
+        const UNITS = [
+            { id: 'liberty', name: 'Liberty', color: '#2563eb' },
+            { id: 'rushcreek', name: 'Rush Creek', color: '#059669' },
+            { id: 'sanrafael', name: 'San Rafael', color: '#d97706' },
+            { id: 'ysa', name: 'YSA', color: '#7c3aed' }
+        ];
+
+        // Default schedule state
+        const DEFAULT_STATE = {
+            liberty: { start: 9, sacFirst: true },
+            rushcreek: { start: 11.5, sacFirst: true },
+            sanrafael: { start: 11, sacFirst: false }, // 2ND first, then SAC
+            ysa: { start: 14, sacFirst: false } // 2ND 2:00-3:00, SAC 3:00-4:00
+        };
+
+        let state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFromURL();
+            loadDarkMode();
+            renderTimeline();
+            renderSchedule();
+            checkConstraints();
+        });
+
+        // Dark mode functions
+        function loadDarkMode() {
+            const isDark = localStorage.getItem('darkMode') === 'true';
+            if (isDark) {
+                document.body.classList.add('dark-mode');
+                updateThemeButton(true);
+            }
+        }
+
+        function toggleDarkMode() {
+            const isDark = document.body.classList.toggle('dark-mode');
+            localStorage.setItem('darkMode', isDark);
+            updateThemeButton(isDark);
+        }
+
+        function updateThemeButton(isDark) {
+            const icon = document.getElementById('theme-icon');
+            const btn = document.getElementById('theme-btn');
+            if (isDark) {
+                icon.textContent = '☀️';
+                btn.innerHTML = '<span id="theme-icon">☀️</span> Light Mode';
+            } else {
+                icon.textContent = '🌙';
+                btn.innerHTML = '<span id="theme-icon">🌙</span> Dark Mode';
+            }
+        }
+
+        function renderTimeline() {
+            const header = document.getElementById('timeline-header');
+            header.innerHTML = '';
+            
+            for (let h = START_HOUR; h <= END_HOUR; h += 0.5) {
+                const pct = ((h - START_HOUR) / TOTAL_HOURS) * 100;
+                const label = document.createElement('div');
+                label.className = 'time-label';
+                label.style.left = pct + '%';
+                label.textContent = formatTime(h);
+                if (h % 1 === 0) {
+                    label.style.fontWeight = '600';
+                }
+                header.appendChild(label);
+            }
+        }
+
+        function renderSchedule() {
+            const container = document.getElementById('schedule-rows');
+            container.innerHTML = '';
+
+            UNITS.forEach(unit => {
+                const row = document.createElement('div');
+                row.className = 'schedule-row';
+
+                const label = document.createElement('div');
+                label.className = 'unit-label';
+                label.textContent = unit.name;
+                row.appendChild(label);
+
+                const timeline = document.createElement('div');
+                timeline.className = 'timeline';
+                
+                // Add grid lines
+                for (let h = START_HOUR; h <= END_HOUR; h += 0.5) {
+                    const line = document.createElement('div');
+                    line.className = 'time-grid-line' + (h % 1 === 0 ? ' hour' : '');
+                    line.style.left = ((h - START_HOUR) / TOTAL_HOURS * 100) + '%';
+                    timeline.appendChild(line);
+                }
+
+                // Add block
+                const block = createBlock(unit);
+                timeline.appendChild(block);
+                
+                row.appendChild(timeline);
+                container.appendChild(row);
+            });
+
+            updateSummary();
+        }
+
+        function createBlock(unit) {
+            const unitState = state[unit.id];
+            const block = document.createElement('div');
+            block.className = `block ${unit.id}`;
+            block.dataset.unit = unit.id;
+            
+            const startPct = ((unitState.start - START_HOUR) / TOTAL_HOURS) * 100;
+            const widthPct = (BLOCK_DURATION / TOTAL_HOURS) * 100;
+            block.style.left = startPct + '%';
+            block.style.width = widthPct + '%';
+
+            // Create segments
+            const seg1 = document.createElement('div');
+            const seg2 = document.createElement('div');
+            
+            if (unitState.sacFirst) {
+                seg1.className = 'block-segment sac';
+                seg1.textContent = 'SAC';
+                seg2.className = 'block-segment second';
+                seg2.textContent = '2ND';
+            } else {
+                seg1.className = 'block-segment second';
+                seg1.style.borderRadius = '4px 0 0 4px';
+                seg1.textContent = '2ND';
+                seg2.className = 'block-segment sac';
+                seg2.style.borderRadius = '0 4px 4px 0';
+                seg2.textContent = 'SAC';
+            }
+            
+            seg1.style.width = '50%';
+            seg2.style.width = '50%';
+            
+            block.appendChild(seg1);
+            block.appendChild(seg2);
+
+            // Drag handling (mouse + touch)
+            let isDragging = false;
+            let startX, startLeft;
+            let hasMoved = false;
+
+            function getClientX(e) {
+                if (e.touches && e.touches.length > 0) {
+                    return e.touches[0].clientX;
+                }
+                return e.clientX;
+            }
+
+            function handleDragStart(e) {
+                isDragging = true;
+                hasMoved = false;
+                block.classList.add('dragging');
+                startX = getClientX(e);
+                startLeft = unitState.start;
+                e.preventDefault();
+            }
+
+            function handleDragMove(e) {
+                if (!isDragging) return;
+                
+                const clientX = getClientX(e);
+                const timeline = block.parentElement;
+                const rect = timeline.getBoundingClientRect();
+                const deltaX = clientX - startX;
+                
+                if (Math.abs(deltaX) > 5) {
+                    hasMoved = true;
+                }
+                
+                const deltaPct = deltaX / rect.width;
+                const deltaHours = deltaPct * TOTAL_HOURS;
+                
+                let newStart = startLeft + deltaHours;
+                // Snap to 30-minute increments
+                newStart = Math.round(newStart * 2) / 2;
+                // Clamp to valid range
+                newStart = Math.max(START_HOUR, Math.min(END_HOUR - BLOCK_DURATION, newStart));
+                
+                unitState.start = newStart;
+                const newPct = ((newStart - START_HOUR) / TOTAL_HOURS) * 100;
+                block.style.left = newPct + '%';
+                
+                checkConstraints();
+                updateSummary();
+                updateURL();
+                
+                e.preventDefault();
+            }
+
+            function handleDragEnd(e) {
+                if (isDragging) {
+                    isDragging = false;
+                    block.classList.remove('dragging');
+                }
+            }
+
+            // Mouse events
+            block.addEventListener('mousedown', handleDragStart);
+            document.addEventListener('mousemove', handleDragMove);
+            document.addEventListener('mouseup', handleDragEnd);
+
+            // Touch events
+            block.addEventListener('touchstart', handleDragStart, { passive: false });
+            document.addEventListener('touchmove', handleDragMove, { passive: false });
+            document.addEventListener('touchend', handleDragEnd);
+
+            // Click/tap to flip order (only if not dragged)
+            block.addEventListener('click', (e) => {
+                if (!hasMoved) {
+                    unitState.sacFirst = !unitState.sacFirst;
+                    renderSchedule();
+                    checkConstraints();
+                    updateURL();
+                }
+            });
+
+            return block;
+        }
+
+        function formatTime(hours) {
+            const h = Math.floor(hours);
+            const m = (hours % 1) * 60;
+            const period = h >= 12 ? 'PM' : 'AM';
+            const displayH = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+            return `${displayH}:${m.toString().padStart(2, '0')}`;
+        }
+
+        function formatTimeRange(start, end) {
+            return `${formatTime(start)} - ${formatTime(end)}`;
+        }
+
+        function getSacTime(unitId) {
+            const s = state[unitId];
+            if (s.sacFirst) {
+                return { start: s.start, end: s.start + 1 };
+            } else {
+                return { start: s.start + 1, end: s.start + 2 };
+            }
+        }
+
+        function get2ndTime(unitId) {
+            const s = state[unitId];
+            if (s.sacFirst) {
+                return { start: s.start + 1, end: s.start + 2 };
+            } else {
+                return { start: s.start, end: s.start + 1 };
+            }
+        }
+
+        function getBlockTime(unitId) {
+            const s = state[unitId];
+            return { start: s.start, end: s.start + BLOCK_DURATION };
+        }
+
+        function timesOverlap(a, b) {
+            return a.start < b.end && b.start < a.end;
+        }
+
+        function getGapMinutes(earlier, later) {
+            return (later.start - earlier.end) * 60;
+        }
+
+        function checkConstraints() {
+            const constraints = [];
+            let score = 100;
+
+            // Get all SAC times sorted by start
+            const sacTimes = UNITS.map(u => ({ id: u.id, name: u.name, ...getSacTime(u.id) }))
+                                  .sort((a, b) => a.start - b.start);
+
+            // 1. No SAC-SAC overlap (hard)
+            for (let i = 0; i < sacTimes.length; i++) {
+                for (let j = i + 1; j < sacTimes.length; j++) {
+                    const overlap = timesOverlap(sacTimes[i], sacTimes[j]);
+                    if (overlap) {
+                        constraints.push({
+                            text: `${sacTimes[i].name} SAC overlaps ${sacTimes[j].name} SAC`,
+                            status: 'fail'
+                        });
+                        score -= 30;
+                    }
+                }
+            }
+
+            // 2. Chapel turnaround: 15 min hard, 30 min soft
+            for (let i = 0; i < sacTimes.length - 1; i++) {
+                const gap = getGapMinutes(sacTimes[i], sacTimes[i + 1]);
+                if (gap < 15) {
+                    constraints.push({
+                        text: `Only ${gap} min between ${sacTimes[i].name} and ${sacTimes[i + 1].name} SAC (need 15+)`,
+                        status: 'fail'
+                    });
+                    score -= 25;
+                } else if (gap < 30) {
+                    constraints.push({
+                        text: `${gap} min between ${sacTimes[i].name} and ${sacTimes[i + 1].name} SAC (prefer 30)`,
+                        status: 'warn'
+                    });
+                    score -= 5;
+                } else {
+                    constraints.push({
+                        text: `${gap} min chapel gap after ${sacTimes[i].name}`,
+                        status: 'pass'
+                    });
+                }
+            }
+
+            // 3. Liberty & Rush Creek: no overlap + 30 min gap (hard)
+            const libBlock = getBlockTime('liberty');
+            const rcBlock = getBlockTime('rushcreek');
+            if (timesOverlap(libBlock, rcBlock)) {
+                constraints.push({
+                    text: 'Liberty & Rush Creek blocks overlap (parking conflict)',
+                    status: 'fail'
+                });
+                score -= 30;
+            } else {
+                const gap = libBlock.end < rcBlock.start 
+                    ? getGapMinutes(libBlock, rcBlock)
+                    : getGapMinutes(rcBlock, libBlock);
+                if (gap < 30) {
+                    constraints.push({
+                        text: `Only ${gap} min between Liberty & Rush Creek (need 30+)`,
+                        status: 'fail'
+                    });
+                    score -= 20;
+                } else {
+                    constraints.push({
+                        text: `${gap} min gap between Liberty & Rush Creek`,
+                        status: 'pass'
+                    });
+                }
+            }
+
+            // 4. RC 2ND and SF 2ND cannot overlap (hard)
+            const rc2nd = get2ndTime('rushcreek');
+            const sf2nd = get2ndTime('sanrafael');
+            if (timesOverlap(rc2nd, sf2nd)) {
+                constraints.push({
+                    text: 'Rush Creek & San Rafael 2ND overlap (classroom conflict)',
+                    status: 'fail'
+                });
+                score -= 25;
+            } else {
+                constraints.push({
+                    text: 'Rush Creek & San Rafael 2ND do not overlap',
+                    status: 'pass'
+                });
+            }
+
+            // 5. Time window preferences (soft)
+            UNITS.forEach(unit => {
+                const block = getBlockTime(unit.id);
+                if (block.start < 9) {
+                    constraints.push({
+                        text: `${unit.name} starts before 9:00 AM`,
+                        status: 'warn'
+                    });
+                    score -= 5;
+                }
+                if (block.end > 16) {
+                    constraints.push({
+                        text: `${unit.name} ends after 4:00 PM`,
+                        status: 'warn'
+                    });
+                    score -= 5;
+                }
+            });
+
+            // 6. Check if all constraints pass
+            const hardFails = constraints.filter(c => c.status === 'fail').length;
+            const warnings = constraints.filter(c => c.status === 'warn').length;
+            
+            if (hardFails === 0 && warnings === 0) {
+                constraints.unshift({
+                    text: 'All constraints satisfied!',
+                    status: 'pass'
+                });
+            }
+
+            // Render constraints
+            const list = document.getElementById('constraint-list');
+            list.innerHTML = constraints.map(c => `
+                <div class="constraint ${c.status}">
+                    <span class="constraint-icon">${c.status === 'pass' ? '✓' : c.status === 'warn' ? '⚠' : '✗'}</span>
+                    ${c.text}
+                </div>
+            `).join('');
+
+            // Render score
+            score = Math.max(0, score);
+            const scoreEl = document.getElementById('score');
+            scoreEl.textContent = `Schedule Score: ${score}/100`;
+            scoreEl.className = 'score ' + (score >= 80 ? 'good' : score >= 50 ? 'warning' : 'bad');
+        }
+
+        function updateSummary() {
+            const grid = document.getElementById('summary-grid');
+            grid.innerHTML = UNITS.map(unit => {
+                const sac = getSacTime(unit.id);
+                const sec = get2ndTime(unit.id);
+                const order = state[unit.id].sacFirst ? 'SAC → 2ND' : '2ND → SAC';
+                return `
+                    <div class="summary-unit">
+                        <h3>${unit.name}</h3>
+                        <p><strong>Order:</strong> ${order}</p>
+                        <p><strong>SAC:</strong> ${formatTimeRange(sac.start, sac.end)}</p>
+                        <p><strong>2ND:</strong> ${formatTimeRange(sec.start, sec.end)}</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // URL State Management
+        function updateURL() {
+            const params = UNITS.map(u => {
+                const s = state[u.id];
+                return `${u.id}=${s.start},${s.sacFirst ? 1 : 0}`;
+            }).join('&');
+            history.replaceState(null, '', '#' + params);
+        }
+
+        function loadFromURL() {
+            const hash = window.location.hash.slice(1);
+            if (!hash) return;
+            
+            hash.split('&').forEach(part => {
+                const [id, values] = part.split('=');
+                if (state[id] && values) {
+                    const [start, sacFirst] = values.split(',');
+                    state[id].start = parseFloat(start);
+                    state[id].sacFirst = sacFirst === '1';
+                }
+            });
+        }
+
+        // Export Functions
+        function resetToDefault() {
+            state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+            renderSchedule();
+            checkConstraints();
+            updateURL();
+        }
+
+        function copySchedule() {
+            const lines = ['CLAYVIEW BUILDING SCHEDULE', '==========================', ''];
+            UNITS.forEach(unit => {
+                const sac = getSacTime(unit.id);
+                const sec = get2ndTime(unit.id);
+                const order = state[unit.id].sacFirst ? 'SAC then 2ND' : '2ND then SAC';
+                lines.push(`${unit.name.toUpperCase()}`);
+                lines.push(`  ${order}`);
+                lines.push(`  Sacrament: ${formatTimeRange(sac.start, sac.end)}`);
+                lines.push(`  Second Hour: ${formatTimeRange(sec.start, sec.end)}`);
+                lines.push('');
+            });
+            
+            navigator.clipboard.writeText(lines.join('\n')).then(() => {
+                alert('Schedule copied to clipboard!');
+            });
+        }
+
+        function copyLink() {
+            navigator.clipboard.writeText(window.location.href).then(() => {
+                alert('Shareable link copied to clipboard!');
+            });
+        }
+
+        function toggleConstraintsReference() {
+            const panel = document.getElementById('constraints-reference');
+            panel.classList.toggle('open');
+        }
+    </script>
+</body>
+</html>

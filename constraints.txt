@@ -1,0 +1,132 @@
+
+
+1. Units & Blocks
+	1.	Each unit (Liberty, Rush Creek, San Rafael, YSA) must have a 2-hour contiguous block, consisting of:
+	•	1 hour Sacrament (SAC)
+	•	1 hour Second Hour (2ND: SS / RS / PH / YM / YW / Primary)
+	2.	The order may be either:
+	•	SAC → 2ND, or
+	•	2ND → SAC
+	3.	Inside a unit’s block, you may optionally have a short internal gap (e.g., 0–10 minutes) between SAC and 2ND, but the total still needs to be ~2 hours.
+
+⸻
+
+2. Chapel / Sacrament Constraints
+	4.	There is only one chapel, so:
+	•	Only one sacrament meeting can be in progress at any time.
+	5.	Chapel turnaround constraint (new, explicit):
+	•	If sacrament for Unit A ends at time t_end(A),
+	•	Then sacrament for Unit B may not start before t_end(A) + 15 minutes.
+	•	In code terms:
+start_sac(B) ≥ end_sac(A) + 15 minutes.
+	6.	Preferred chapel buffer:
+	•	The “nice to have” target is 30 minutes:
+start_sac(B) ≥ end_sac(A) + 30 minutes (soft constraint).
+	•	Your solver/visualizer could:
+	•	Treat 15 minutes as hard minimum (no violation allowed), and
+	•	Treat 30 minutes as optimization / scoring (solutions closer to 30 score better).
+
+So for any consecutive sacrament meetings (Liberty → Rush Creek, RC → SF, SF → YSA, etc.), the hard minimum gap is 15, ideal gap is 30.
+
+⸻
+
+3. Parking & Family-Ward Constraint
+	7.	Liberty & Rush Creek cannot overlap at all:
+	•	This is a hard parking constraint.
+	•	Their sacrament + second hour blocks must be disjoint in time.
+	8.	Additional buffer between Liberty & Rush Creek blocks:
+	•	There must be ≥ 30 minutes between:
+	•	Liberty’s block end and Rush Creek’s block start, or
+	•	Rush Creek’s block end and any hypothetical Liberty start (if you ever reordered them).
+	•	This 30 minutes:
+	•	Satisfies both the parking requirement and the chapel turnaround requirement (which only needs 15).
+
+In code terms for Liberty (L) and Rush Creek (RC):
+	•	end_block(L) + 30 ≤ start_block(RC) (or vice versa if order ever flips).
+
+⸻
+
+4. Classroom / Second-Hour Constraints
+	9.	Rush Creek and San Rafael may not have second hour at the same time.
+	•	Their 2ND blocks must not overlap:
+	•	2ND_RC ∩ 2ND_SF = ∅ (empty set).
+	•	Reason: not enough classrooms for two full second-hour programs (children + youth + adults).
+	10.	Second hour vs sacrament overlaps are allowed:
+	•	RC 2ND vs SF SAC → allowed (chapel + classrooms split).
+	•	SF 2ND vs RC SAC → allowed.
+	•	Any unit’s 2ND vs another unit’s SAC is okay as long as:
+	•	Chapel turnaround constraints (15–30 min between SAC end/start) are respected, and
+	•	You don’t violate the Liberty/RC block separation.
+	11.	Second hour vs second hour is allowed between:
+	•	YSA and any other unit.
+	•	(Potentially Liberty and SF/YSA, but in practice Liberty is early and out before others ramp up.)
+
+So the only forbidden second-hour pair is RC vs SF.
+
+⸻
+
+5. San Rafael Independence
+	12.	San Rafael must run a fully independent second hour:
+	•	They provide their own:
+	•	Primary
+	•	YM/YW
+	•	RS/PH
+	•	No structural dependence on Rush Creek’s classes or teachers.
+	13.	Therefore, you must guarantee:
+	•	A full contiguous 1-hour 2ND block for San Rafael with sufficient classroom availability.
+	•	That block cannot overlap RC’s 2ND (constraint #9).
+
+⸻
+
+6. Time Grid / Granularity
+	14.	Time is discretized into 30-minute slots for scheduling decisions.
+	•	Start/end times align with half-hour increments (e.g., 9:00, 9:30, 10:00…).
+	15.	Internal transitions (like SF’s current 10–15-minute gap between their 2ND and SAC):
+	•	You can model as:
+	•	Either:
+	•	A dedicated “gap” variable (e.g., gap_SF ∈ [0, 15]), or
+	•	Folded into the fact that SF’s SAC simply starts 1 slot (30 min) after their 2ND ends, if you keep the grid coarse.
+	•	Practically, for your tool: you can treat “gaps less than 30 minutes” as visually within the same block but logically important for chapel turnover.
+
+⸻
+
+7. YSA Flexibility
+	16.	YSA ward:
+	•	Is small and does not create a parking problem.
+	•	May overlap its 2ND with any other unit’s 2ND or SAC.
+	•	May overlap its SAC with another unit’s 2ND (but not with another SAC).
+	17.	Current YSA pattern (soft preference):
+	•	2ND: 2:00–3:00
+	•	SAC: 3:00–4:00
+	•	But they’re the most flexible candidate for movement if needed.
+
+⸻
+
+8. Day Window & Preferences
+	18.	Preferred overall building window: roughly 9:00–16:00.
+	19.	Avoid:
+	•	Starts earlier than 8:30 (soft).
+	•	End times later than 16:30–17:00 (soft).
+	20.	Prefer:
+	•	Keeping Liberty and YSA time blocks roughly where they are.
+	•	Minimizing the number of units that have to shift.
+
+⸻
+
+9. Summary for Implementation
+
+If you’re encoding this into a little tool/solver, you might define:
+	•	Hard constraints:
+	1.	Exactly 1 SAC and 1 2ND per unit, 2 contiguous hours total.
+	2.	No SAC–SAC overlap.
+	3.	start_sac(B) ≥ end_sac(A) + 15 min for any two units A,B ordered in time.
+	4.	Liberty & Rush Creek blocks non-overlapping, with ≥30 min between.
+	5.	RC 2ND cannot overlap SF 2ND.
+	6.	SF must have a full contiguous 1-hour 2ND block.
+	7.	All block start times are on 30-minute boundaries.
+	•	Soft constraints (for scoring / “best” schedule):
+	1.	SAC gap target: start_sac(B) ≥ end_sac(A) + 30 min.
+	2.	Keep Liberty, Rush Creek, and YSA close to their present start times.
+	3.	Keep total building window within 9:00–16:00.
+	4.	Avoid pushing SF too early or too late if alternatives exist.
+
